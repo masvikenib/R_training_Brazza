@@ -1,0 +1,247 @@
+---
+title: "logistic_regression"
+author: "Masvikeni"
+date: "2022-09-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Load packages
+```{r}
+library(lubridate)
+library(here)
+library(rio)
+library(broom)
+library(tidyverse)
+library(linelist)
+library(janitor)
+library(knitr)
+library(kableExtra)
+library(skimr)
+library(DescTools)
+library(remotes)
+library(readxl)
+library(dplyr)
+library(here)
+library(flextable)
+library(forestmodel)
+library(finalfit)
+library(data.table)
+
+```
+
+#import data
+```{r}
+cholera_0 <- here( "data", "cleaned", 
+    "cholera_gondwana_merged.xlsx") %>% 
+    import(sheet=1, skip=0)   %>% 
+    as_tibble() %>% 
+  clean_variable_names() %>% 
+  clean_dates()
+                   
+   
+#import the claaning rules          
+cleaning_rules <-
+  import(here("data", "raw", "cleaning_rules.xlsx"))
+  
+
+#apply the cleaning rules to the dataset
+cholera  <- clean_variable_spelling(cholera_0, wordlists = cleaning_rules)
+
+
+table(cholera$region_res)
+
+
+table(cholera$district_sanitaire_res)
+```
+
+#Tidying variables
+```{r}
+#outcome/dependent variables
+
+table(cholera$evolution)
+
+cholera$evolution1 <-
+
+  ifelse(cholera$evolution == "Decede", "1", "0")
+
+ #table(cholera$evolution1)
+ 
+ class(cholera$evolution1)
+ 
+ #Dependent variables and univariate analysis
+ 
+ # Gender
+ 
+ table(cholera$sexe)
+ 
+ chisq.test(cholera$evolution1,cholera$sexe)
+ 
+ #AGE
+ 
+class(cholera$age_cas)
+
+cholera$age_cas <- as.numeric(cholera$age_cas)
+
+class(cholera$age_cas)
+
+table(cholera$age_cas)
+
+cholera$age_year <- 
+  ifelse(cholera$unite_age =="Ans", cholera$age_cas, cholera$age_cas/12)
+ 
+
+cholera$age_group  <-  ifelse(cholera$age_year<5, "<5",
+          ifelse(cholera$age_year>= 5&cholera$age_year<15, "5-14",
+                  ifelse( cholera$age_year>=15, "15+", NA)))
+        
+        table(cholera$age_group)
+                 
+#max(cholera$age_year)
+
+cholera$age_group <- factor(cholera$age_group,
+levels = c("<5", "5-14", "15+"),
+labels = c("<5", "5-14", "15+"))
+         
+table(cholera$age_group)
+
+chisq.test(cholera$age_group, cholera$evolution1)
+  
+
+##Treatment plan
+
+table(cholera$plan_deshydatation)
+
+
+cholera$treatment_plan <- 
+   ifelse (cholera$plan_deshydatation == "A"|
+          cholera$plan_deshydatation=="B", "A&B", "C")
+  
+  table(cholera$treatment_plan)
+  chisq.test(cholera$evolution1, cholera$treatment_plan)
+  
+#Period
+  
+  #min(cholera$date_enregistrement)
+  
+  class(cholera$date_enregistrement)
+  
+  cholera$period <- 
+    ifelse(cholera$date_enregistrement<"2019-01-222", "Before_peak", "After_peak")
+  
+  table(cholera$period)
+  
+  chisq.test(cholera$evolution1, cholera$period)
+  
+#Vaccination status
+  
+  table(cholera$vaccine)
+  chisq.test(cholera$evolution1, cholera$vaccine)
+  
+  
+  #Aire de sante with CTC
+  
+  table(cholera$aire_sante_res)
+  cholera$aire_sante_vacc <- 
+     ifelse(cholera$aire_sante_res==" Mayonde", "Oui", "Non")
+       
+  table(cholera$aire_sante_vacc)
+  chisq.test(cholera$evolution1, cholera$aire_sante_vacc)
+```
+
+
+```{r}
+table(cholera$aire_sante_vac)  
+  cholera$aire_sante_ctc  <-
+    ifelse(cholera$ctc_utc)
+  
+  
+##Reporting delay
+  class(cholera$date_arrivee_ctc)
+  cholera$reporting_delay <- 
+    cholera$date_arrivee_ctc-cholera$date_debut_symptones
+  
+  table(cholera$reporting_delay)
+  
+  
+  cholera$reporting_delay2 <- 
+    ifelse(cholera$reporting_delay<=1, "<=24H", NA)
+      ifelse(cholera$reporting_delay> 1, ">24H", NA)
+  
+  table(cholera$reporting_delay2)
+  
+  
+```
+```{r}
+
+```
+
+
+#univariate analysis
+
+```{r}
+outcome <- "evolution1"
+
+vars <- c("sexe", "agegroup", "treatment_plan", "period", "vaccine", "aire_sante_vacc", ", aire_sante_ctc", "reporting_delay2")
+
+tab_univariable <- summary_factorlist(cholera, outcome, vars, p=TRUE,
+              add_dependent_label = TRUE)
+
+tab_univariable2 <- tab_univariable1 %>% 
+  kable(row.names = FALSE) %>% 
+  kable_styling("stripped")
+
+tab_univariable2
+
+save_kable(tab_univariable2)
+file=here::here("outputs"/tab_univariable2.html)
+ latex header includes = NULL
+```
+
+#Multvariable analysis
+```{r}
+class(cholera$evolution1)
+
+cholera$evolution1  <- as.numeric(cholera$evolution1)
+
+mode10 <- glm(evolution1~ 1,
+              family = "binomial",
+              data= cholera)
+
+summary(mode10)
+
+model1 <-  glm(evolution1 ~ treatment_plan+period+aire_sante_vacc+aire_sante_ctc+ reporting_delay2,/
+              family = "binomial",
+              data= cholera)
+               
+ summary(model1)         
+
+ 
+ model1_exp <- tidy(model1, exponentiate= TRUE, config)
+ 
+ #Visualisation of odds ratios
+ 
+multivariate_cholera <- forestmodel(mpdel=glm(formula= (evolution1 ~ treatment_plan+age_group + aire_sante_vacc+ reporting_delay2),
+  data=cholera,
+   family ="binomial"))
+
+multivariate_cholera
+
+directory <- here ("outputs")
+
+imagefile1 <- file.path(directory, "multivariate_cholera.png")
+
+ggsave(imagefile1, width = 20, height = 8)
+ 
+                                               
+                                               
+                                               
+                                               
+                                               
+ 
+ 
+```
+

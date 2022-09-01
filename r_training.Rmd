@@ -1,0 +1,188 @@
+---
+title: "r_training"
+author: "Brine Masvikeni"
+date: "2022-07-18"
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Loading packages
+```{r}
+
+library(lubridate)
+library(here)
+library(rio)
+library(tidyverse)
+library(linelist)
+library(janitor)
+library(knitr)
+library(kableExtra)
+library(skimr)
+library(DescTools)
+library(remotes)
+library(readxl)
+library(dplyr)
+library(here)
+
+install.packages("flextable")
+library(flextable)
+install.packages("gtsummary")
+library(gtsummary)
+install.packages("officer")
+library(officer)
+install.packages("scales")
+library(scales)
+install.packages("tidyr")
+library(tidyr)
+
+```
+
+
+
+```{r}
+
+here()
+
+cholera <- here("data","raw",
+"cholera_gondowana_2019_10_21.xlsx") %>% 
+  import(sheet=1, skip=0) %>% 
+  as_tibble() %>% 
+  clean_variable_names()
+
+
+
+## view(cholera)
+
+##summary(cholera)
+
+skim(cholera)
+
+min(cholera$age_cas)
+
+max(cholera$age_cas)
+
+mean(cholera$age_cas)
+
+mode(cholera$age_cas)
+
+table(cholera$unite_age)
+
+table(cholera$vaccine, cholera$evolution)
+```
+
+
+#  Manipulating/ transforming data
+
+```{r}
+# select part of the dataset
+
+class(cholera$date_debut_symptones)
+
+cholera$date_debut_symptones<- as.Date(cholera$date_debut_symptones)
+
+cholera$date_arrivee_fosa<- as.Date(cholera$date_arrivee_fosa)
+                                       
+                                       
+cholera1 <- cholera %>%
+  select(num_ordre, date_enregistrement, age_cas, unite_age, evolution, date_debut_symptones, aire_sante_res, date_arrivee_fosa) %>% 
+
+  
+mutate(age_years= ifelse(unite_age=="Ans", age_cas, age_cas/12)) %>% 
+
+  mutate(outcome=evolution) %>% 
+  
+  select(-evolution) %>% 
+  
+mutate(report_delay= (date_arrivee_fosa-date_debut_symptones)) %>% 
+
+
+filter(outcome=="Gueri"|outcome=="Decede") %>%
+  arrange(desc(date_debut_symptones))
+
+view(cholera1)
+  
+table(cholera1$outcome)
+
+cholera$age_year <-  ifelse(cholera$unite_age=="Ans", cholera$age_cas, cholera$age_cas/12)
+ table(cholera$age_cas)
+
+```
+
+
+
+#transformation:  group_by and summarise
+
+```{r}
+
+table(cholera$region_res)
+
+cholera2 <- cholera %>% 
+  select(region_res, age_year) %>% 
+  group_by(region_res) %>% 
+  summarise(mean_age=mean(age_year))
+
+cholera2
+
+  
+```
+
+
+#imorting for merging
+
+```{r}
+cholera_boutou <- here ("data","raw",
+"cholera_boutou_2019_10_21.xlsx") %>% 
+  import() %>%
+  clean_variable_names()
+  
+cholera_paloli <- here ("data","raw",
+"cholera_paloli_2019_10_21.xlsx") %>% 
+  import() %>%
+  
+  clean_variable_names()
+#merge the two dataset
+  
+names(cholera_paloli)
+names(cholera_boutou)
+ 
+cholera_paloli$date_enregistrement<-
+  as.character(cholera_paloli$date_enregistrement)
+
+cholera_gondwana_merged <-  
+
+  union_all(cholera_paloli, cholera_boutou) %>% 
+  clean_dates()
+ 
+  ##cholera_gondwana_merged
+  
+  export (cholera_gondwana_merged, 
+          file=here::here("data/cleaned/cholera_gondwana_merged.xlsx"))
+  
+```
+
+
+##Cleaning rules
+
+
+```{r}
+cleaning_rules <- 
+   rio::import(here("data", "cleaned", "cleaning_rules.xlsx"))
+
+#apply the cleaning rules to the dataset
+cholera_gondwana_merged1 <- 
+  clean_variable_spelling(cholera_gondwana_merged, wordlists = cleaning_rules)
+
+
+export(cholera_gondwana_merged1,
+       file = here::here("data/cleaned/cholera_gondwana_merged1.xlsx"))
+    
+```
+
+

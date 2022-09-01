@@ -1,0 +1,91 @@
+---
+title: "markdown_introduction"
+author: "Masvikeni"
+date: "2022-09-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r logo, echo=FALSE}
+#install.packages("htmltools")
+#library(hmtltools)
+htmltools::img(
+  src= knitr::image_uri(here::here("WHO_logo.jpg")),
+  alt="logo",
+  style="position:absolute; top:0; right:0; padding:60px; width:20%"
+  )
+
+```
+
+```{r echo=FALSE}
+library(here)
+library(tidyverse)
+library(rio)
+```
+
+
+
+```{r echo=FALSE}
+cholera <- here ("data","raw", "cholera_gondowana_2019_10_21.xlsx") %>%
+import()
+
+plot_data <- cholera %>%
+  select(region_res, Sexe, Diarrhee:nausees) %>% 
+  pivot_longer(cols = Diarrhee:nausees, names_to = "Symptoms",
+               values_to = "Response") %>% 
+  group_by(region_res,Sexe,Symptoms) %>% 
+  summarise(count = sum(Response=="Oui")) %>% 
+  arrange(count)
+          
+#plot_data
+
+head(plot_data)
+```
+
+#Plot 1
+
+```{r echo=FALSE}
+ggplot(data = plot_data) +
+  #generate a point plot
+  #to have different colors add color in aes 
+  geom_point(mapping = aes(x= Symptoms, y = count, color=Sexe ))+
+  scale_color_manual(values = c("F"="blue", "M"="red"))+
+  #scale_shape_manual(values = c("Boutou"=7, "Polalo"=8))
+labs (x="Types of Symptoms",
+     y="Number of YES values",
+     title = "This is my First plot",
+     subtitle = "for the cholera dataset",
+     caption = paste("Dated: ",  Sys.Date()))
+
+#axis title  did not change to red
+theme (axis.title = element_text(color ="red", size= 15),
+      plot.title =  element_text(hjust = 0.5),
+      plot.subtitle = element_text(hjust = 0.5))
+      
+
+ ggplot(data = plot_data, aes(x=Symptoms, y=count))+
+    geom_point(mapping = aes(color=Sexe ))+
+    geom_line()
+
+```
+
+
+```{r echo=FALSE}
+ plot_data %>% 
+   dplyr::filter(Sexe=="F", region_res=="Boutou") %>%  
+   ggplot(aes(x=Symptoms, y=count, group=1))+
+   geom_text(aes(label= count),vjust = 2)+
+   geom_line(color="blue", size=2)+
+   geom_point(color="red", size=3)+
+ labs (x="Symptoms Types",
+       y="Count of Symptoms",
+       title = "Cholera Symptoms:Boutou ",
+       #subtitle = "for the cholera dataset",
+       caption = paste("Dated: ",  Sys.Date()))+
+ theme(plot.title = element_text(hjust = 0.5, size=16, colour ="red" ))
+ 
+```
+
